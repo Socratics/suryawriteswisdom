@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Manage stories — Small Stories{% endblock %}
+{% block content %}
+  <section class="admin-page">
+    <p class="eyebrow">Author dashboard</p>
+    <h1>Publish a story.</h1>
+    <p class="admin-intro">Paste the link to a Google Doc you can access. The imported story will appear publicly on your site.</p>
+
+    <form class="import-card" action="{{ url_for('import_article') }}" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="document-url">Google Docs link</label>
+      <div class="import-row">
+        <input id="document-url" name="document_url" type="url" placeholder="https://docs.google.com/document/d/…" required>
+        <button class="button button-dark" type="submit">Import &amp; publish</button>
+      </div>
+      <p class="field-hint">Make sure the document is ready to be shared with your readers.</p>
+    </form>
+
+    <section class="admin-stories" aria-labelledby="published-title">
+      <h2 id="published-title">Published stories</h2>
+      {% if posts %}
+        <ul class="published-list">
+          {% for post in posts %}
+            <li>
+              <a href="{{ url_for('article', slug=post.slug) }}">{{ post.title }}</a>
+              <time>{{ post.published_at[:10] }}</time>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Your published articles will appear here.</p>
+      {% endif %}
+    </section>
+  </section>
+{% endblock %}

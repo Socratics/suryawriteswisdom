@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Surya Writes Wisdom — Ideas for a thoughtful life{% endblock %}
+{% block description %}Reflections on personal growth, mindful living, and the ideas that help us live with more purpose. A journal by Surya.{% endblock %}
+{% block content %}
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="eyebrow"><span class="eyebrow-mark" aria-hidden="true"></span> A journal for the journey</p>
+      <h1 id="hero-title">A little more<br>thought. <em>A little<br>more meaning.</em></h1>
+      <p class="hero-description">Notes on personal growth, mindful living, and finding wisdom in the everyday.</p>
+      <div class="hero-actions">
+        <a class="button button-dark" href="#journal">Explore the journal <span aria-hidden="true">↓</span></a>
+        <a class="text-link" href="#about">A note about this space <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+
+    <div class="hero-art" aria-label="A quiet moment with a book and a cup of tea" role="img">
+      <span class="art-sun" aria-hidden="true"></span>
+      <span class="art-line art-line-one" aria-hidden="true"></span>
+      <span class="art-line art-line-two" aria-hidden="true"></span>
+      <div class="art-note">
+        <span class="art-note-label">A thought to keep</span>
+        <span class="art-note-quote">“The quieter you become, the more you can hear.”</span>
+        <span class="art-note-rule" aria-hidden="true"></span>
+        <span class="art-note-signoff">Make room for reflection.</span>
+      </div>
+      <span class="art-caption">SLOW DOWN · LOOK CLOSER</span>
+    </div>
+  </section>
+
+  <section class="journal-section" id="journal" aria-labelledby="journal-title">
+    <div class="section-heading">
+      <div>
+        <p class="eyebrow">Words to return to</p>
+        <h2 id="journal-title">From the journal<span class="brand-dot">.</span></h2>
+      </div>
+      <span class="story-count">{{ posts|length }} {% if posts|length == 1 %}essay{% else %}essays{% endif %}</span>
+    </div>
+
+    {% if posts %}
+      {% set featured = posts[0] %}
+      <article class="featured-story">
+        <div class="featured-index" aria-hidden="true">01</div>
+        <div class="featured-copy">
+          <p class="story-date">{{ featured.published_at[:10] }} <span aria-hidden="true">·</span> Featured essay</p>
+          <h3><a href="{{ url_for('article', slug=featured.slug) }}">{{ featured.title }}</a></h3>
+          <p class="story-summary">{{ featured.summary or "A reflection from the journal. Open this essay to read the full story." }}</p>
+          <a class="read-link" href="{{ url_for('article', slug=featured.slug) }}">Read the essay <span aria-hidden="true">↗</span></a>
+        </div>
+        <span class="featured-spark" aria-hidden="true">✳</span>
+      </article>
+
+      {% if posts|length > 1 %}
+        <div class="story-list">
+          {% for post in posts[1:] %}
+            <article class="story-card">
+              <p class="story-date">{{ post.published_at[:10] }}</p>
+              <h3><a href="{{ url_for('article', slug=post.slug) }}">{{ post.title }}</a></h3>
+              <p class="story-summary">{{ post.summary or "Open this essay to read more." }}</p>
+              <a class="read-link" href="{{ url_for('article', slug=post.slug) }}">Read the essay <span aria-hidden="true">↗</span></a>
+            </article>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="empty-state">
+        <span class="empty-icon" aria-hidden="true">✳</span>
+        <h3>The first essay is on its way.</h3>
+        <p>This journal is a space for ideas worth carrying with you. Check back soon for the first story.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <section class="about-section" id="about" aria-labelledby="about-title">
+    <div class="about-mark" aria-hidden="true">S<span>W</span></div>
+    <div class="about-copy">
+      <p class="eyebrow">A note from Surya</p>
+      <h2 id="about-title">For the curious,<br>the growing, the becoming.</h2>
+      <p>Surya Writes Wisdom is a personal journal about paying attention: to the lessons life leaves in ordinary moments, to the habits that help us grow, and to the questions that make us think a little deeper.</p>
+      <a class="text-link" href="#journal">Find a thought to take with you <span aria-hidden="true">↗</span></a>
+    </div>
+  </section>
+{% endblock %}
