@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+instance/
+client_secret.json
+google_token.json
+__pycache__/
+*.py[cod]
+.venv/
