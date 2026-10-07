@@ -1,2 +1,2 @@
-# suryawriteswisdom
-Stories, essays and articles.
+# surya writes wisdom
+Stories, essays, and articles.
