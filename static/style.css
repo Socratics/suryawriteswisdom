@@ -2,7 +2,7 @@
 
 :root {
   color: #292b26;
-  background: #f7f6f2;
+  background: #f6f1e7;
   font-family: "DM Sans", "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -13,18 +13,20 @@
   --green-dark: #344532;
   --line: #e5e2d9;
   --paper: #fffefa;
+  --cream: #f6f1e7;
   --serif: "Playfair Display", Georgia, serif;
 }
 
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
+h1, h2, h3, h4, h5, h6 { color: var(--green-dark); }
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
   background:
     radial-gradient(ellipse at 9% 9%, rgb(225 231 216 / 38%), transparent 27rem),
-    #f7f6f2;
+    var(--cream);
 }
 
 a { color: inherit; }
@@ -399,7 +401,7 @@ nav a:hover, .nav-button:hover, .back-link:hover { color: var(--green); }
 }
 .article-content h1, .article-content h2, .article-content h3 {
   margin: 1.8em 0 0.55em;
-  color: var(--ink);
+  color: var(--green-dark);
   font-family: var(--serif);
   line-height: 1.3;
 }
