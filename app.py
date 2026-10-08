@@ -142,16 +142,19 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             login_hint=flask_app.config["ADMIN_EMAIL"],
         )
         session["oauth_state"] = state
+        session["oauth_code_verifier"] = flow.code_verifier
         return redirect(authorization_url)
 
     @flask_app.get("/oauth/callback")
     def oauth_callback() -> Any:
         state = session.pop("oauth_state", None)
-        if not state:
+        code_verifier = session.pop("oauth_code_verifier", None)
+        if not state or not code_verifier:
             flash("The sign-in session expired. Please try again.", "error")
             return redirect(url_for("index"))
 
         flow = oauth_flow(flask_app, state=state)
+        flow.code_verifier = code_verifier
         flow.fetch_token(authorization_response=request.url)
         token_response = flow.oauth2session.token
         id_token = token_response.get("id_token") if token_response else None
