@@ -23,8 +23,8 @@ Open <http://127.0.0.1:5000>. Choose **Author sign in**, approve access with
 the Google account in `ADMIN_EMAIL`, then paste a Google Docs URL into the
 author dashboard. The article will be visible on the public home page.
 
-The first run creates `instance/blog.sqlite3`. OAuth client and token files
-also stay under `instance/`; do not share or commit those files.
+The first run creates `instance/blog.sqlite3`. Local OAuth tokens are stored
+in that database; do not share or commit the database.
 
 ## Set up Google Docs import
 
@@ -63,12 +63,31 @@ The included `render.yaml` configures a free Render web service. To publish:
 6. Redeploy the service and open the Render URL.
 
 Render's free web service can sleep while idle, so the first visit after a
-period of inactivity may take longer. This starter stores posts and Google
-OAuth tokens in local SQLite/files. Render's free service filesystem is
-ephemeral: posts imported into the hosted service and its saved Google token
-can be lost when the service restarts or is redeployed. The free deployment is
-therefore suitable for a public preview, not durable publishing. Before
-publishing articles, connect durable database and token storage.
+period of inactivity may take longer. Its filesystem is temporary, so connect
+a hosted database before publishing posts.
+
+### Connect free Supabase storage
+
+The app uses SQLite locally and switches to PostgreSQL when `DATABASE_URL` is
+set. Its posts and Google OAuth refresh token are both stored in the database.
+
+1. Create a project at [Supabase](https://supabase.com/dashboard). Keep the
+   database password private and save it somewhere secure.
+2. In the project dashboard, open **Connect** and select the **Session pooler**
+   connection string. Copy the URI; do not paste it into chat, GitHub, or a
+   public file.
+3. In Render, open the `surya-writes-wisdom` service's **Environment** page and
+   set `DATABASE_URL` to that connection string.
+4. Save and deploy. Once Render reports **Live**, sign in to the author
+   dashboard again so the Google token is stored in Supabase. Posts imported
+   from then on are stored there as well.
+
+The Supabase Free plan currently lists a 500 MB database and pauses projects
+after a week of inactivity. It does not list automatic daily backups on the
+Free plan. This is more durable than Render's temporary filesystem, but it is
+not a backup; keep the original articles in Google Docs and export backups
+periodically. Check Supabase's [current pricing](https://supabase.com/pricing)
+before signing up, since plan limits can change.
 
 The custom domain `suryawriteswisdom.com` is purchased separately from a domain
 registrar. The free Render URL works without buying a domain. After registering

@@ -16,6 +16,7 @@ from typing import Any, Callable, Generator, TypeVar, cast
 from urllib.parse import urlparse
 
 import bleach
+import psycopg
 from dotenv import load_dotenv
 from flask import (
     Flask,
@@ -29,6 +30,7 @@ from flask import (
     url_for,
 )
 from flask_wtf.csrf import CSRFProtect
+from psycopg.rows import dict_row
 from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.oauth2.credentials import Credentials
 from google.oauth2.id_token import verify_oauth2_token
@@ -63,6 +65,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     flask_app.config.from_mapping(
         SECRET_KEY=os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32),
         DATABASE=str(Path(flask_app.instance_path) / "blog.sqlite3"),
+        DATABASE_URL=os.environ.get("DATABASE_URL", "").strip(),
         ADMIN_EMAIL=os.environ.get("ADMIN_EMAIL", "").strip().lower(),
         GOOGLE_CLIENT_SECRETS_FILE=os.environ.get(
             "GOOGLE_CLIENT_SECRETS_FILE",
@@ -92,16 +95,18 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @flask_app.get("/")
     def index() -> str:
         with connect_database(flask_app) as database:
-            posts = database.execute(
+            posts = execute_query(
+                database,
                 "SELECT slug, title, summary, published_at FROM posts "
-                "ORDER BY published_at DESC"
+                "ORDER BY published_at DESC",
             ).fetchall()
         return render_template("index.html", posts=posts)
 
     @flask_app.get("/articles/<slug>")
     def article(slug: str) -> str:
         with connect_database(flask_app) as database:
-            post = database.execute(
+            post = execute_query(
+                database,
                 "SELECT title, content, published_at FROM posts WHERE slug = ?",
                 (slug,),
             ).fetchone()
@@ -113,8 +118,10 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     @admin_required
     def admin() -> str:
         with connect_database(flask_app) as database:
-            posts = database.execute(
-                "SELECT slug, title, published_at FROM posts ORDER BY published_at DESC"
+            posts = execute_query(
+                database,
+                "SELECT slug, title, published_at FROM posts "
+                "ORDER BY published_at DESC",
             ).fetchall()
         return render_template("admin.html", posts=posts)
 
@@ -172,9 +179,9 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
             return redirect(url_for("index"))
 
         credentials = flow.credentials
-        token_path = token_file(flask_app)
-        token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text(credentials.to_json(), encoding="utf-8")
+        if not isinstance(credentials, Credentials):
+            raise TypeError("Google OAuth returned an unsupported credentials type.")
+        save_google_credentials(flask_app, credentials)
         session["admin_email"] = email
         flash("Signed in. You can now import an article from Google Docs.", "success")
         return redirect(url_for("admin"))
@@ -232,7 +239,8 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         slug = unique_slug(flask_app, title, published_at)
 
         with connect_database(flask_app) as database:
-            database.execute(
+            execute_query(
+                database,
                 "INSERT INTO posts (slug, title, summary, content, published_at) "
                 "VALUES (?, ?, ?, ?, ?)",
                 (slug, title, summary, safe_html, published_at),
@@ -253,9 +261,15 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
 
 @contextmanager
-def connect_database(app: Flask) -> Generator[sqlite3.Connection, None, None]:
-    database = sqlite3.connect(app.config["DATABASE"])
-    database.row_factory = sqlite3.Row
+def connect_database(app: Flask) -> Generator[Any, None, None]:
+    if app.config["DATABASE_URL"]:
+        database = psycopg.Connection[dict[str, Any]].connect(
+            app.config["DATABASE_URL"],
+            row_factory=dict_row,
+        )
+    else:
+        database = sqlite3.connect(app.config["DATABASE"])
+        database.row_factory = sqlite3.Row
     try:
         with database:
             yield database
@@ -276,6 +290,24 @@ def initialize_database(app: Flask) -> None:
             )
             """
         )
+        database.execute(
+            """
+            CREATE TABLE IF NOT EXISTS oauth_tokens (
+                token_id INTEGER PRIMARY KEY CHECK (token_id = 1),
+                credentials_json TEXT NOT NULL
+            )
+            """
+        )
+
+
+def execute_query(
+    database: Any,
+    query: str,
+    parameters: tuple[Any, ...] = (),
+) -> Any:
+    if isinstance(database, sqlite3.Connection):
+        return database.execute(query, parameters)
+    return database.execute(query.replace("?", "%s"), parameters)
 
 
 def oauth_flow(app: Flask, state: str | None = None) -> Flow:
@@ -300,17 +332,39 @@ def token_file(app: Flask) -> Path:
     return Path(app.instance_path) / "google_token.json"
 
 
-def google_credentials(app: Flask) -> Credentials | None:
-    path = token_file(app)
-    if not path.is_file():
-        return None
+def save_google_credentials(app: Flask, credentials: Credentials) -> None:
+    with connect_database(app) as database:
+        execute_query(
+            database,
+            "INSERT INTO oauth_tokens (token_id, credentials_json) VALUES (?, ?) "
+            "ON CONFLICT (token_id) DO UPDATE SET "
+            "credentials_json = excluded.credentials_json",
+            (1, credentials.to_json()),
+        )
 
-    credentials = Credentials.from_authorized_user_info(
-        json.loads(path.read_text(encoding="utf-8")), SCOPES
-    )
+
+def google_credentials(app: Flask) -> Credentials | None:
+    with connect_database(app) as database:
+        token = execute_query(
+            database,
+            "SELECT credentials_json FROM oauth_tokens WHERE token_id = ?",
+            (1,),
+        ).fetchone()
+
+    if token is None:
+        path = token_file(app)
+        if not path.is_file():
+            return None
+        credentials_data = json.loads(path.read_text(encoding="utf-8"))
+        credentials = Credentials.from_authorized_user_info(credentials_data, SCOPES)
+        save_google_credentials(app, credentials)
+    else:
+        credentials = Credentials.from_authorized_user_info(
+            json.loads(token["credentials_json"]), SCOPES
+        )
     if credentials.expired and credentials.refresh_token:
         credentials.refresh(GoogleAuthRequest())
-        path.write_text(credentials.to_json(), encoding="utf-8")
+        save_google_credentials(app, credentials)
     if not credentials.valid:
         return None
     return credentials
@@ -330,8 +384,10 @@ def unique_slug(app: Flask, title: str, published_at: str) -> str:
     candidate = f"{base}-{date_suffix}"
     suffix = 2
     with connect_database(app) as database:
-        while database.execute(
-            "SELECT 1 FROM posts WHERE slug = ?", (candidate,)
+        while execute_query(
+            database,
+            "SELECT 1 FROM posts WHERE slug = ?",
+            (candidate,),
         ).fetchone():
             candidate = f"{base}-{date_suffix}-{suffix}"
             suffix += 1
