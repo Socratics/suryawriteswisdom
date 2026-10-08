@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="{% block description %}Reflections and essays on living thoughtfully, growing with intention, and finding wisdom in everyday life.{% endblock %}">
+  <meta property="og:site_name" content="Surya Writes Wisdom">
+  <meta property="og:type" content="website">
+  <title>{% block title %}Surya Writes Wisdom{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="{{ url_for('index') }}">
+      <span class="brand-mark" aria-hidden="true">S<span>W</span></span>
+      <span class="brand-name">Surya Writes <span>Wisdom</span><i class="brand-dot">.</i></span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a href="{{ url_for('index') }}">Home</a>
+      <a href="{{ url_for('index') }}#journal">Journal</a>
+      <a href="{{ url_for('index') }}#about">About</a>
+      {% if session.get('admin_email') %}
+        <a href="{{ url_for('admin') }}">Dashboard</a>
+        <form class="nav-form" action="{{ url_for('logout') }}" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="nav-button" type="submit">Sign out</button>
+        </form>
+      {% else %}
+        <a class="nav-author" href="{{ url_for('login') }}">Author sign in <span aria-hidden="true">↗</span></a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <main class="page-shell" id="main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-list" aria-live="polite">
+          {% for category, message in messages %}
+            <p class="flash flash-{{ category }}">{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <a class="footer-brand" href="{{ url_for('index') }}">Surya Writes Wisdom<span class="brand-dot">.</span></a>
+    <span>Ideas grow when they’re shared.</span>
+    <span class="footer-copyright">© {{ now_year }} Surya</span>
+  </footer>
+</body>
+</html>
