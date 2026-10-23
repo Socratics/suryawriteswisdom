@@ -93,3 +93,27 @@ The custom domain `suryawriteswisdom.com` is purchased separately from a domain
 registrar. The free Render URL works without buying a domain. After registering
 the custom domain, add it to the Render service and follow Render's DNS
 instructions.
+
+## Publish from the Android writing app
+
+The companion Android app can publish directly into this blog's posts database
+using `POST /api/mobile/posts`. To enable it:
+
+1. Deploy this repository to Render.
+2. Render generates a random `MOBILE_PUBLISH_TOKEN` for the service from
+   `render.yaml`. After deployment, copy it from the Render service's
+   **Environment** page. Do not commit or share the token.
+3. In the Android app's **Site** settings, enter the free HTTPS address shown
+   by Render and paste the token. The app stores the token encrypted with
+   Android Keystore.
+
+The endpoint creates a new post when no article slug is supplied. A draft that
+has already been published sends its slug to update that article. Submitted
+Markdown is converted to HTML and sanitized with the same allowlist used for
+Google Docs imports. The app only connects over HTTPS.
+
+The mobile token is a shared secret: anyone who obtains it can publish to the
+blog. Rotate it in Render and update the app if it is exposed. For a live
+service, keep `DATABASE_URL` configured to durable PostgreSQL storage; Render's
+free web service filesystem is temporary, so SQLite posts can disappear when
+the service restarts or redeploys.

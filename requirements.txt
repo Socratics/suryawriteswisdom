@@ -1,5 +1,6 @@
 Flask>=3.0,<4.0
 Flask-WTF>=1.2,<2.0
+Markdown>=3.0,<4.0
 bleach>=6.0,<7.0
 google-api-python-client>=2.0,<3.0
 google-auth-oauthlib>=1.2,<2.0

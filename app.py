@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import hmac
 import json
 import os
 import re
@@ -16,6 +17,7 @@ from typing import Any, Callable, Generator, TypeVar, cast
 from urllib.parse import urlparse
 
 import bleach
+import markdown
 import psycopg
 from dotenv import load_dotenv
 from flask import (
@@ -23,6 +25,7 @@ from flask import (
     abort,
     current_app,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -67,6 +70,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         DATABASE=str(Path(flask_app.instance_path) / "blog.sqlite3"),
         DATABASE_URL=os.environ.get("DATABASE_URL", "").strip(),
         ADMIN_EMAIL=os.environ.get("ADMIN_EMAIL", "").strip().lower(),
+        MOBILE_PUBLISH_TOKEN=os.environ.get("MOBILE_PUBLISH_TOKEN", "").strip(),
         GOOGLE_CLIENT_SECRETS_FILE=os.environ.get(
             "GOOGLE_CLIENT_SECRETS_FILE",
             str(Path(flask_app.instance_path) / "client_secret.json"),
@@ -79,6 +83,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         ),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
+        MAX_CONTENT_LENGTH=512 * 1024,
     )
     if test_config:
         flask_app.config.update(test_config)
@@ -256,6 +261,86 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         session.pop("admin_email", None)
         flash("You have signed out.", "success")
         return redirect(url_for("index"))
+
+    @flask_app.post("/api/mobile/posts")
+    @csrf.exempt
+    def mobile_publish() -> Any:
+        expected_token = flask_app.config["MOBILE_PUBLISH_TOKEN"]
+        if not expected_token:
+            return jsonify(error="Mobile publishing is not enabled on this site."), 503
+
+        scheme, separator, supplied_token = request.headers.get("Authorization", "").partition(" ")
+        if (
+            not separator
+            or scheme.lower() != "bearer"
+            or not hmac.compare_digest(
+                supplied_token.encode("utf-8"), expected_token.encode("utf-8")
+            )
+        ):
+            return jsonify(error="A valid publishing token is required."), 401
+
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify(error="Send a JSON object with title and content."), 400
+
+        title = payload.get("title")
+        subtitle = payload.get("subtitle", "")
+        content = payload.get("content")
+        slug = payload.get("slug")
+        if not isinstance(title, str) or not isinstance(subtitle, str) or not isinstance(content, str):
+            return jsonify(error="Title, subtitle, and content must be text."), 400
+
+        title = title.strip()
+        subtitle = subtitle.strip()
+        content = content.strip()
+        if not title or not content:
+            return jsonify(error="Add a title and some writing before publishing."), 400
+        if len(title) > 180 or len(subtitle) > 240 or len(content) > 100_000:
+            return jsonify(error="The title, subtitle, or post is too long."), 413
+        if slug is not None and (
+            not isinstance(slug, str)
+            or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", slug)
+        ):
+            return jsonify(error="The saved article identifier is invalid."), 400
+
+        rendered_html = markdown.markdown(content, extensions=["extra", "sane_lists"])
+        safe_html = bleach.clean(
+            rendered_html,
+            tags=ALLOWED_TAGS,
+            attributes=ALLOWED_ATTRIBUTES,
+            protocols={"http", "https", "mailto"},
+            strip=True,
+        )
+        plain_text = re.sub(r"<[^>]*>", " ", safe_html)
+        summary = subtitle or " ".join(html.unescape(plain_text).split())[:240]
+        published_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+        response_status = 201
+        with connect_database(flask_app) as database:
+            if slug:
+                response_status = 200
+                result = execute_query(
+                    database,
+                    "UPDATE posts SET title = ?, summary = ?, content = ?, published_at = ? WHERE slug = ?",
+                    (title, summary, safe_html, published_at, slug),
+                )
+                if result.rowcount == 0:
+                    return jsonify(error="This article no longer exists on the site."), 404
+            else:
+                slug = unique_slug(flask_app, title, published_at)
+                execute_query(
+                    database,
+                    "INSERT INTO posts (slug, title, summary, content, published_at) VALUES (?, ?, ?, ?, ?)",
+                    (slug, title, summary, safe_html, published_at),
+                )
+            database.commit()
+
+        return jsonify(
+            title=title,
+            slug=slug,
+            url=url_for("article", slug=slug),
+            published_at=published_at,
+        ), response_status
 
     return flask_app
 
